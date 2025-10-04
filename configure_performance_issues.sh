@@ -2,8 +2,11 @@
 
 # Configure PostgreSQL with suboptimal settings to demonstrate performance issues
 
-# Set configuration
-sudo bash -c "cat > /etc/postgresql/*/main/conf.d/performance_demo.conf" << 'EOF'
+# Get PostgreSQL version
+PG_VER=$(ls /etc/postgresql/ | head -1)
+
+# Set intentionally poor configuration
+sudo bash -c "cat > /etc/postgresql/$PG_VER/main/conf.d/performance_demo.conf" << 'EOF'
 # Intentionally poor settings for demonstration
 shared_buffers = 128MB
 work_mem = 4MB
@@ -26,7 +29,7 @@ pg_stat_statements.max = 10000
 EOF
 
 # Configure insecure pg_hba.conf
-sudo bash -c "cat >> /etc/postgresql/*/main/pg_hba.conf" << 'EOF'
+sudo bash -c "cat >> /etc/postgresql/$PG_VER/main/pg_hba.conf" << 'EOF'
 # Insecure configuration for demonstration (to be secured in lab)
 host    all             all             0.0.0.0/0               md5
 EOF
