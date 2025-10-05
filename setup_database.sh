@@ -1,17 +1,17 @@
 #!/bin/bash
 
 # Setup script for CarvedRock PostgreSQL database
-# This script creates the database structure and loads sample data with performance issues
+echo "Creating CarvedRock database..."
 
 # Create database and enable extensions
-sudo -u postgres psql << EOF
+psql << EOF
 CREATE DATABASE carvedrock;
 \c carvedrock
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 EOF
 
 # Create tables without indexes (to demonstrate performance issues)
-sudo -u postgres psql -d carvedrock << 'EOF'
+psql -d carvedrock << 'EOF'
 -- Categories table
 CREATE TABLE categories (
     id SERIAL PRIMARY KEY,
@@ -48,6 +48,15 @@ CREATE TABLE orders (
     quantity INTEGER NOT NULL,
     order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status VARCHAR(50) DEFAULT 'pending'
+);
+
+-- Order items table for more realistic data volume
+CREATE TABLE order_items (
+    id SERIAL PRIMARY KEY,
+    order_id INTEGER REFERENCES orders(id),
+    product_id INTEGER REFERENCES products(id),
+    quantity INTEGER NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL
 );
 
 -- Create app_user with initial insecure password
