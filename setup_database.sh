@@ -1,34 +1,19 @@
 #!/bin/bash
 
 # Setup script for CarvedRock PostgreSQL database
-echo "Starting database setup..."
+echo "Creating CarvedRock database..."
 
-# Check if we can connect to PostgreSQL
-if ! psql -c "SELECT 1;" > /dev/null 2>&1; then
-    echo "ERROR: Cannot connect to PostgreSQL"
-    exit 1
-fi
-
-# Check if database already exists
-if psql -lqt | cut -d \| -f 1 | grep -qw carvedrock; then
-    echo "Database 'carvedrock' already exists"
-else
-    echo "Creating CarvedRock database..."
-    
-    # Create database
-    createdb carvedrock || {
-        echo "ERROR: Failed to create database"
-        exit 1
-    }
-fi
-
-# Create extensions and tables
-psql -d carvedrock << 'EOF'
--- Enable pg_stat_statements extension
+# Create database and enable extensions
+psql << EOF
+CREATE DATABASE carvedrock;
+\c carvedrock
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+EOF
 
+# Create tables without indexes (to demonstrate performance issues)
+psql -d carvedrock << 'EOF'
 -- Categories table
-CREATE TABLE IF NOT EXISTS categories (
+CREATE TABLE categories (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     description TEXT,
@@ -36,7 +21,7 @@ CREATE TABLE IF NOT EXISTS categories (
 );
 
 -- Products table (intentionally missing indexes for performance demonstration)
-CREATE TABLE IF NOT EXISTS products (
+CREATE TABLE products (
     id SERIAL PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
     description TEXT,
@@ -47,7 +32,7 @@ CREATE TABLE IF NOT EXISTS products (
 );
 
 -- Stock table
-CREATE TABLE IF NOT EXISTS stock (
+CREATE TABLE stock (
     id SERIAL PRIMARY KEY,
     product_id INTEGER REFERENCES products(id),
     quantity INTEGER NOT NULL,
@@ -56,7 +41,7 @@ CREATE TABLE IF NOT EXISTS stock (
 );
 
 -- Orders table
-CREATE TABLE IF NOT EXISTS orders (
+CREATE TABLE orders (
     id SERIAL PRIMARY KEY,
     customer_email VARCHAR(200),
     product_id INTEGER REFERENCES products(id),
@@ -66,7 +51,7 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 
 -- Order items table for more realistic data volume
-CREATE TABLE IF NOT EXISTS order_items (
+CREATE TABLE order_items (
     id SERIAL PRIMARY KEY,
     order_id INTEGER REFERENCES orders(id),
     product_id INTEGER REFERENCES products(id),
@@ -74,22 +59,12 @@ CREATE TABLE IF NOT EXISTS order_items (
     unit_price DECIMAL(10,2) NOT NULL
 );
 
--- Create app_user if not exists
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_user WHERE usename = 'app_user') THEN
-        CREATE USER app_user WITH PASSWORD 'changeme123';
-    END IF;
-END$$;
-
--- Grant privileges
+-- Create app_user with initial insecure password
+CREATE USER app_user WITH PASSWORD 'changeme123';
 GRANT CONNECT ON DATABASE carvedrock TO app_user;
 GRANT USAGE ON SCHEMA public TO app_user;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO app_user;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO app_user;
-
--- Verify tables were created
-\dt
 EOF
 
-echo "Database structure setup complete"
+echo "Database structure created successfully"
