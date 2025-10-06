@@ -171,6 +171,33 @@ SET shipping_address = repeat('Shipping address padding. ', 3),
     billing_address = repeat('Billing address padding. ', 3)
 WHERE order_id <= 5000;
 
+-- Create a complex query function for performance testing
+CREATE OR REPLACE FUNCTION slow_customer_report(days_back INTEGER DEFAULT 90)
+RETURNS TABLE(
+    customer_name VARCHAR,
+    total_orders BIGINT,
+    total_spent NUMERIC,
+    avg_order NUMERIC,
+    last_order TIMESTAMP
+) AS $
+BEGIN
+    RETURN QUERY
+    SELECT 
+        c.customer_name,
+        COUNT(o.order_id),
+        SUM(o.total_amount),
+        AVG(o.total_amount),
+        MAX(o.order_date)
+    FROM customers c
+    LEFT JOIN orders o ON c.customer_id = o.customer_id
+    WHERE o.order_date > CURRENT_DATE - (days_back || ' days')::INTERVAL
+        AND o.status = 'completed'
+    GROUP BY c.customer_name
+    HAVING COUNT(o.order_id) > 0
+    ORDER BY SUM(o.total_amount) DESC;
+END;
+$ LANGUAGE plpgsql;
+
 -- Force statistics update
 ANALYZE customers;
 ANALYZE products;
