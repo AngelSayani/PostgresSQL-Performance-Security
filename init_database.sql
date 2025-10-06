@@ -1,5 +1,5 @@
--- CarvedRock Database Initialization Script
--- Creates tables and initial data for PostgreSQL performance and security lab
+-- CarvedRock Database Initialization Script (Minimal Version)
+-- Creates tables and minimal data for PostgreSQL performance and security lab
 
 -- Drop existing tables if they exist
 DROP TABLE IF EXISTS order_items CASCADE;
@@ -35,7 +35,7 @@ CREATE TABLE products (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create orders table
+-- Create orders table (NO FOREIGN KEY for performance demo)
 CREATE TABLE orders (
     order_id SERIAL PRIMARY KEY,
     customer_id INTEGER NOT NULL,
@@ -51,19 +51,17 @@ CREATE TABLE orders (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create order_items table
+-- Create order_items table (NO FOREIGN KEYS for performance demo)
 CREATE TABLE order_items (
     order_item_id SERIAL PRIMARY KEY,
     order_id INTEGER NOT NULL,
     product_id INTEGER NOT NULL,
     quantity INTEGER NOT NULL,
     unit_price DECIMAL(10,2) NOT NULL,
-    discount DECIMAL(5,2) DEFAULT 0,
-    FOREIGN KEY (order_id) REFERENCES orders(order_id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    discount DECIMAL(5,2) DEFAULT 0
 );
 
--- Insert sample customers (100,000 records)
+-- Insert sample customers (5,000 records - enough to show performance issues)
 INSERT INTO customers (customer_name, email, phone, address, city, state, zip_code)
 SELECT 
     'Customer ' || generate_series,
@@ -81,9 +79,9 @@ SELECT
          ELSE 'TX'
     END,
     LPAD((random() * 99999)::integer::text, 5, '0')
-FROM generate_series(1, 100000);
+FROM generate_series(1, 5000);
 
--- Insert sample products (1,000 records)
+-- Insert sample products (100 records)
 INSERT INTO products (product_name, category, price, stock_quantity, sku)
 SELECT 
     'Product ' || generate_series,
@@ -95,12 +93,12 @@ SELECT
     (random() * 500 + 10)::decimal(10,2),
     (random() * 1000)::integer,
     'SKU-' || LPAD(generate_series::text, 6, '0')
-FROM generate_series(1, 1000);
+FROM generate_series(1, 100);
 
--- Insert sample orders (500,000 records)
-INSERT INTO orders (customer_id, order_date, status, total_amount, payment_method, shipping_method)
+-- Insert sample orders (20,000 records - enough to demonstrate slow queries)
+INSERT INTO orders (customer_id, order_date, status, total_amount, payment_method, shipping_method, notes)
 SELECT 
-    (random() * 99999 + 1)::integer,
+    (random() * 4999 + 1)::integer,
     CURRENT_DATE - (random() * 365)::integer * INTERVAL '1 day',
     CASE WHEN random() < 0.7 THEN 'completed'
          WHEN random() < 0.9 THEN 'shipped'
@@ -115,39 +113,39 @@ SELECT
     CASE WHEN random() < 0.6 THEN 'standard'
          WHEN random() < 0.9 THEN 'express'
          ELSE 'overnight'
-    END
-FROM generate_series(1, 500000);
+    END,
+    repeat('Order data padding for bloat. ', 5)
+FROM generate_series(1, 20000);
 
--- Insert sample order items (1,500,000 records)
+-- Insert sample order items (50,000 records)
 INSERT INTO order_items (order_id, product_id, quantity, unit_price)
 SELECT 
-    (random() * 499999 + 1)::integer,
-    (random() * 999 + 1)::integer,
+    (random() * 19999 + 1)::integer,
+    (random() * 99 + 1)::integer,
     (random() * 5 + 1)::integer,
     (random() * 500 + 10)::decimal(10,2)
-FROM generate_series(1, 1500000);
+FROM generate_series(1, 50000);
 
 -- Update order totals based on order items
 UPDATE orders o
 SET total_amount = (
-    SELECT SUM(quantity * unit_price * (1 - discount/100))
+    SELECT COALESCE(SUM(quantity * unit_price * (1 - discount/100)), 0)
     FROM order_items oi
     WHERE oi.order_id = o.order_id
 )
-WHERE EXISTS (
-    SELECT 1 FROM order_items oi WHERE oi.order_id = o.order_id
-);
+WHERE order_id <= 10000;  -- Only update first half for performance
 
--- Add some duplicate rows to create bloat (these will be deleted)
-INSERT INTO orders (customer_id, order_date, status, total_amount)
-SELECT customer_id, order_date, 'deleted', total_amount
+-- Create bloat by inserting and deleting rows
+-- Insert duplicate orders
+INSERT INTO orders (customer_id, order_date, status, total_amount, notes)
+SELECT customer_id, order_date, 'deleted', total_amount, 'DELETED ROW FOR BLOAT'
 FROM orders
-WHERE order_id <= 250000;
+WHERE order_id <= 10000;
 
--- Create some gaps in the data to simulate fragmentation
-DELETE FROM orders WHERE status = 'deleted';
+-- Delete them to create dead tuples
+DELETE FROM orders WHERE notes = 'DELETED ROW FOR BLOAT';
 
--- Add more duplicate rows for customers
+-- Insert duplicate customers
 INSERT INTO customers (customer_name, email, phone, address, city, state, zip_code)
 SELECT 
     customer_name || '_dup',
@@ -158,12 +156,22 @@ SELECT
     state,
     zip_code
 FROM customers
-WHERE customer_id <= 75000;
+WHERE customer_id <= 2500;
 
 -- Delete duplicates to create bloat
 DELETE FROM customers WHERE customer_name LIKE '%_dup';
 
--- Force some statistics updates
+-- Add some padding to existing rows to increase table size
+UPDATE customers 
+SET address = address || ' - ' || repeat('Extra data for size. ', 3)
+WHERE customer_id <= 1000;
+
+UPDATE orders 
+SET shipping_address = repeat('Shipping address padding. ', 3),
+    billing_address = repeat('Billing address padding. ', 3)
+WHERE order_id <= 5000;
+
+-- Force statistics update
 ANALYZE customers;
 ANALYZE products;
 ANALYZE orders;
