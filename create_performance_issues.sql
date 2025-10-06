@@ -1,5 +1,4 @@
 -- Create Performance Issues for Lab Exercise
--- This script intentionally creates performance problems for learning purposes
 
 -- Drop all existing indexes except primary keys
 DO $$
